@@ -12,13 +12,12 @@
   ******************************************************************************
   * @attention
   *
-  * <h2><center>&copy; Copyright (c) 2017 STMicroelectronics.
-  * All rights reserved.</center></h2>
+  * Copyright (c) 2017 STMicroelectronics.
+  * All rights reserved.
   *
-  * This software component is licensed by ST under BSD 3-Clause license,
-  * the "License"; You may not use this file except in compliance with the
-  * License. You may obtain a copy of the License at:
-  *                        opensource.org/licenses/BSD-3-Clause
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
   *
   ******************************************************************************
   */
@@ -54,8 +53,73 @@ void TIM6_DAC_IRQHandler(void);
   */
 HAL_StatusTypeDef HAL_InitTick (uint32_t TickPriority)
 {
+  RCC_ClkInitTypeDef    clkconfig;
+  uint32_t              uwTimclock, uwAPB1Prescaler = 0U;
+  uint32_t              uwPrescalerValue = 0U;
+  uint32_t              pFLatency;
+  HAL_StatusTypeDef     status;
+
+  /* Enable TIM6 clock */
+  __HAL_RCC_TIM6_CLK_ENABLE();
+
+  /* Get clock configuration */
+  HAL_RCC_GetClockConfig(&clkconfig, &pFLatency);
+
+  /* Get APB1 prescaler */
+  uwAPB1Prescaler = clkconfig.APB1CLKDivider;
+
+  /* Compute TIM6 clock */
+  if (uwAPB1Prescaler == RCC_HCLK_DIV1)
+  {
+    uwTimclock = HAL_RCC_GetPCLK1Freq();
+  }
+  else
+  {
+    uwTimclock = 2 * HAL_RCC_GetPCLK1Freq();
+  }
+
+  /* Compute the prescaler value to have TIM6 counter clock equal to 1MHz */
+  uwPrescalerValue = (uint32_t) ((uwTimclock / 1000000U) - 1U);
+
+  /* Initialize TIM6 */
+  TimHandle.Instance = TIM6;
+
+  /* Initialize TIMx peripheral as follow:
+  + Period = [(TIM6CLK/1000) - 1]. to have a (1/1000) s time base.
+  + Prescaler = (uwTimclock/1000000 - 1) to have a 1MHz counter clock.
+  + ClockDivision = 0
+  + Counter direction = Up
+  */
+  TimHandle.Init.Period = (1000000U / 1000U) - 1U;
+  TimHandle.Init.Prescaler = uwPrescalerValue;
+  TimHandle.Init.ClockDivision = 0U;
+  TimHandle.Init.CounterMode = TIM_COUNTERMODE_UP;
+  TimHandle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  status = HAL_TIM_Base_Init(&TimHandle);
+  if (status == HAL_OK)
+  {
+    /* Start the TIM time Base generation in interrupt mode */
+    status = HAL_TIM_Base_Start_IT(&TimHandle);
+    if (status == HAL_OK)
+    {
+      /* Enable the TIM6 global Interrupt */
+      HAL_NVIC_EnableIRQ(TIM6_DAC_IRQn);
+
+      if (TickPriority < (1UL << __NVIC_PRIO_BITS))
+      {
+        /* Enable the TIM6 global Interrupt */
+        HAL_NVIC_SetPriority(TIM6_DAC_IRQn, TickPriority, 0);
+        uwTickPrio = TickPriority;
+      }
+      else
+      {
+        status = HAL_ERROR;
+      }
+    }
+  }
+
   /* Return function status */
-  return HAL_ERROR;
+  return status;
 }
 
 /**
@@ -110,4 +174,4 @@ void TIM6_DAC_IRQHandler(void)
   * @}
   */ 
 
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
+
