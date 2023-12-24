@@ -65,7 +65,7 @@ Product {
 
     Export {
         Depends { name: 'stm32' }
-        stm32.includePaths: [ FileInfo.joinPaths(exportingProduct.sourceDirectory, stm32.targetSeries + '/inc') ]
+        stm32.includePaths: [ FileInfo.joinPaths(exportingProduct.sourceDirectory, stm32.targetSeries, 'inc') ]
         stm32.libraryPaths: [ exportingProduct.destinationDirectory ]
     }
 }
