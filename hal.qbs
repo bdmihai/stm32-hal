@@ -36,36 +36,36 @@ Product {
     Properties {
         condition: stm32.targetSeries == 'STM32F1'
         stm32.includePaths: [
-            'STM32F1xx/inc'
+            'STM32F1/inc'
         ]
     }
     Properties {
         condition: stm32.targetSeries == 'STM32F4'
         stm32.includePaths: [
-            'STM32F4xx/inc'
+            'STM32F4/inc'
         ]
     }
 
     Group {
-        name: 'STM32F1xx'
+        name: 'STM32F1'
         condition: stm32.targetSeries == 'STM32F1'
         files: [
-            'STM32F1xx/inc/*.h',
-            'STM32F1xx/src/*.c'
+            'STM32F1/inc/*.h',
+            'STM32F1/src/*.c'
         ]
     }
     Group {
-        name: 'STM32F4xx'
+        name: 'STM32F4'
         condition: stm32.targetSeries == 'STM32F4'
         files: [
-            'STM32F4xx/inc/*.h',
-            'STM32F4xx/src/*.c'
+            'STM32F4/inc/*.h',
+            'STM32F4/src/*.c'
         ]
     }
 
     Export {
         Depends { name: 'stm32' }
-        stm32.includePaths: [ FileInfo.joinPaths(exportingProduct.sourceDirectory, stm32.targetSeries + 'xx/inc') ]
+        stm32.includePaths: [ FileInfo.joinPaths(exportingProduct.sourceDirectory, stm32.targetSeries + '/inc') ]
         stm32.libraryPaths: [ exportingProduct.destinationDirectory ]
     }
 }
