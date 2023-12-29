@@ -45,6 +45,12 @@ Product {
             'STM32F4/inc'
         ]
     }
+    Properties {
+        condition: stm32.targetSeries == 'STM32H7'
+        stm32.includePaths: [
+            'STM32H7/inc'
+        ]
+    }
 
     Group {
         name: 'STM32F1'
@@ -62,6 +68,15 @@ Product {
             'STM32F4/src/*.c'
         ]
     }
+    Group {
+        name: 'STM32H7'
+        condition: stm32.targetSeries == 'STM32H7'
+        files: [
+            'STM32H7/inc/*.h',
+            'STM32H7/src/*.c'
+        ]
+    }
+
 
     Export {
         Depends { name: 'stm32' }
