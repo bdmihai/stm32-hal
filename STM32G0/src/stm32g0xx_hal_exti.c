@@ -1,10 +1,10 @@
 /**
   ******************************************************************************
-  * @file    stm32f4xx_hal_exti.c
+  * @file    stm32g0xx_hal_exti.c
   * @author  MCD Application Team
   * @brief   EXTI HAL module driver.
   *          This file provides firmware functions to manage the following
-  *          functionalities of the Extended Interrupts and events controller (EXTI) peripheral:
+  *          functionalities of the General Purpose Input/Output (EXTI) peripheral:
   *           + Initialization and de-initialization functions
   *           + IO operation functions
   *
@@ -36,8 +36,8 @@
         (++) Falling
         (++) Both of them
 
-    (+) When set in interrupt mode, configurable Exti lines have two different
-        interrupts pending registers which allow to distinguish which transition
+    (+) When set in interrupt mode, configurable Exti lines have two diffenrents
+        interrupt pending registers which allow to distinguish which transition
         occurs:
         (++) Rising edge pending interrupt
         (++) Falling
@@ -83,9 +83,9 @@
   */
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32f4xx_hal.h"
+#include "stm32g0xx_hal.h"
 
-/** @addtogroup STM32F4xx_HAL_Driver
+/** @addtogroup STM32G0xx_HAL_Driver
   * @{
   */
 
@@ -103,11 +103,12 @@
 #ifdef HAL_EXTI_MODULE_ENABLED
 
 /* Private typedef -----------------------------------------------------------*/
-/* Private defines -----------------------------------------------------------*/
+/* Private defines ------------------------------------------------------------*/
 /** @defgroup EXTI_Private_Constants EXTI Private Constants
   * @{
   */
-
+#define EXTI_MODE_OFFSET                    0x04u   /* 0x10: offset between CPU IMR/EMR registers */
+#define EXTI_CONFIG_OFFSET                  0x08u   /* 0x20: offset between CPU Rising/Falling configuration registers */
 /**
   * @}
   */
@@ -122,8 +123,8 @@
   */
 
 /** @addtogroup EXTI_Exported_Functions_Group1
-  *  @brief    Configuration functions
-  *
+ *  @brief    Configuration functions
+ *
 @verbatim
  ===============================================================================
               ##### Configuration functions #####
@@ -141,9 +142,11 @@
   */
 HAL_StatusTypeDef HAL_EXTI_SetConfigLine(EXTI_HandleTypeDef *hexti, EXTI_ConfigTypeDef *pExtiConfig)
 {
+  __IO uint32_t *regaddr;
   uint32_t regval;
   uint32_t linepos;
   uint32_t maskline;
+  uint32_t offset;
 
   /* Check null pointer */
   if ((hexti == NULL) || (pExtiConfig == NULL))
@@ -158,7 +161,8 @@ HAL_StatusTypeDef HAL_EXTI_SetConfigLine(EXTI_HandleTypeDef *hexti, EXTI_ConfigT
   /* Assign line number to handle */
   hexti->Line = pExtiConfig->Line;
 
-  /* Compute line mask */
+  /* compute line register offset and line mask */
+  offset = ((pExtiConfig->Line & EXTI_REG_MASK) >> EXTI_REG_SHIFT);
   linepos = (pExtiConfig->Line & EXTI_PIN_MASK);
   maskline = (1uL << linepos);
 
@@ -168,27 +172,38 @@ HAL_StatusTypeDef HAL_EXTI_SetConfigLine(EXTI_HandleTypeDef *hexti, EXTI_ConfigT
     assert_param(IS_EXTI_TRIGGER(pExtiConfig->Trigger));
 
     /* Configure rising trigger */
+    regaddr = (&EXTI->RTSR1 + (EXTI_CONFIG_OFFSET * offset));
+    regval = *regaddr;
+
     /* Mask or set line */
     if ((pExtiConfig->Trigger & EXTI_TRIGGER_RISING) != 0x00u)
     {
-      EXTI->RTSR |= maskline;
+      regval |= maskline;
     }
     else
     {
-      EXTI->RTSR &= ~maskline;
+      regval &= ~maskline;
     }
 
+    /* Store rising trigger mode */
+    *regaddr = regval;
+
     /* Configure falling trigger */
+    regaddr = (&EXTI->FTSR1 + (EXTI_CONFIG_OFFSET * offset));
+    regval = *regaddr;
+
     /* Mask or set line */
     if ((pExtiConfig->Trigger & EXTI_TRIGGER_FALLING) != 0x00u)
     {
-      EXTI->FTSR |= maskline;
+      regval |= maskline;
     }
     else
     {
-      EXTI->FTSR &= ~maskline;
+      regval &= ~maskline;
     }
 
+    /* Store falling trigger mode */
+    *regaddr = regval;
 
     /* Configure gpio port selection in case of gpio exti line */
     if ((pExtiConfig->Line & EXTI_GPIO) == EXTI_GPIO)
@@ -196,37 +211,50 @@ HAL_StatusTypeDef HAL_EXTI_SetConfigLine(EXTI_HandleTypeDef *hexti, EXTI_ConfigT
       assert_param(IS_EXTI_GPIO_PORT(pExtiConfig->GPIOSel));
       assert_param(IS_EXTI_GPIO_PIN(linepos));
 
-      regval = SYSCFG->EXTICR[linepos >> 2u];
-      regval &= ~(SYSCFG_EXTICR1_EXTI0 << (SYSCFG_EXTICR1_EXTI1_Pos * (linepos & 0x03u)));
-      regval |= (pExtiConfig->GPIOSel << (SYSCFG_EXTICR1_EXTI1_Pos * (linepos & 0x03u)));
-      SYSCFG->EXTICR[linepos >> 2u] = regval;
+      regval = EXTI->EXTICR[linepos >> 2u];
+      regval &= ~(EXTI_EXTICR1_EXTI0 << (EXTI_EXTICR1_EXTI1_Pos * (linepos & 0x03u)));
+      regval |= (pExtiConfig->GPIOSel << (EXTI_EXTICR1_EXTI1_Pos * (linepos & 0x03u)));
+      EXTI->EXTICR[linepos >> 2u] = regval;
     }
   }
 
   /* Configure interrupt mode : read current mode */
+  regaddr = (&EXTI->IMR1 + (EXTI_MODE_OFFSET * offset));
+  regval = *regaddr;
+
   /* Mask or set line */
   if ((pExtiConfig->Mode & EXTI_MODE_INTERRUPT) != 0x00u)
   {
-    EXTI->IMR |= maskline;
+    regval |= maskline;
   }
   else
   {
-    EXTI->IMR &= ~maskline;
+    regval &= ~maskline;
   }
 
+  /* Store interrupt mode */
+  *regaddr = regval;
+
   /* Configure event mode : read current mode */
+  regaddr = (&EXTI->EMR1 + (EXTI_MODE_OFFSET * offset));
+  regval = *regaddr;
+
   /* Mask or set line */
   if ((pExtiConfig->Mode & EXTI_MODE_EVENT) != 0x00u)
   {
-    EXTI->EMR |= maskline;
+    regval |= maskline;
   }
   else
   {
-    EXTI->EMR &= ~maskline;
+    regval &= ~maskline;
   }
+
+  /* Store event mode */
+  *regaddr = regval;
 
   return HAL_OK;
 }
+
 
 /**
   * @brief  Get configuration of a dedicated Exti line.
@@ -236,9 +264,11 @@ HAL_StatusTypeDef HAL_EXTI_SetConfigLine(EXTI_HandleTypeDef *hexti, EXTI_ConfigT
   */
 HAL_StatusTypeDef HAL_EXTI_GetConfigLine(EXTI_HandleTypeDef *hexti, EXTI_ConfigTypeDef *pExtiConfig)
 {
+  __IO uint32_t *regaddr;
   uint32_t regval;
   uint32_t linepos;
   uint32_t maskline;
+  uint32_t offset;
 
   /* Check null pointer */
   if ((hexti == NULL) || (pExtiConfig == NULL))
@@ -249,17 +279,20 @@ HAL_StatusTypeDef HAL_EXTI_GetConfigLine(EXTI_HandleTypeDef *hexti, EXTI_ConfigT
   /* Check the parameter */
   assert_param(IS_EXTI_LINE(hexti->Line));
 
-  /* Store handle line number to configuration structure */
+  /* Store handle line number to configiguration structure */
   pExtiConfig->Line = hexti->Line;
 
-  /* Compute line mask */
+  /* compute line register offset and line mask */
+  offset = ((pExtiConfig->Line & EXTI_REG_MASK) >> EXTI_REG_SHIFT);
   linepos = (pExtiConfig->Line & EXTI_PIN_MASK);
   maskline = (1uL << linepos);
 
   /* 1] Get core mode : interrupt */
+  regaddr = (&EXTI->IMR1 + (EXTI_MODE_OFFSET * offset));
+  regval = *regaddr;
 
   /* Check if selected line is enable */
-  if ((EXTI->IMR & maskline) != 0x00u)
+  if ((regval & maskline) != 0x00u)
   {
     pExtiConfig->Mode = EXTI_MODE_INTERRUPT;
   }
@@ -269,8 +302,11 @@ HAL_StatusTypeDef HAL_EXTI_GetConfigLine(EXTI_HandleTypeDef *hexti, EXTI_ConfigT
   }
 
   /* Get event mode */
+  regaddr = (&EXTI->EMR1 + (EXTI_MODE_OFFSET * offset));
+  regval = *regaddr;
+
   /* Check if selected line is enable */
-  if ((EXTI->EMR & maskline) != 0x00u)
+  if ((regval & maskline) != 0x00u)
   {
     pExtiConfig->Mode |= EXTI_MODE_EVENT;
   }
@@ -282,15 +318,21 @@ HAL_StatusTypeDef HAL_EXTI_GetConfigLine(EXTI_HandleTypeDef *hexti, EXTI_ConfigT
   /* 2] Get trigger for configurable lines : rising */
   if ((pExtiConfig->Line & EXTI_CONFIG) != 0x00u)
   {
+    regaddr = (&EXTI->RTSR1 + (EXTI_CONFIG_OFFSET * offset));
+    regval = *regaddr;
+
     /* Check if configuration of selected line is enable */
-    if ((EXTI->RTSR & maskline) != 0x00u)
+    if ((regval & maskline) != 0x00u)
     {
       pExtiConfig->Trigger = EXTI_TRIGGER_RISING;
     }
 
     /* Get falling configuration */
+    regaddr = (&EXTI->FTSR1 + (EXTI_CONFIG_OFFSET * offset));
+    regval = *regaddr;
+
     /* Check if configuration of selected line is enable */
-    if ((EXTI->FTSR & maskline) != 0x00u)
+    if ((regval & maskline) != 0x00u)
     {
       pExtiConfig->Trigger |= EXTI_TRIGGER_FALLING;
     }
@@ -300,13 +342,14 @@ HAL_StatusTypeDef HAL_EXTI_GetConfigLine(EXTI_HandleTypeDef *hexti, EXTI_ConfigT
     {
       assert_param(IS_EXTI_GPIO_PIN(linepos));
 
-      regval = SYSCFG->EXTICR[linepos >> 2u];
-      pExtiConfig->GPIOSel = (regval >> (SYSCFG_EXTICR1_EXTI1_Pos * (linepos & 0x03u))) & SYSCFG_EXTICR1_EXTI0;
+      regval = EXTI->EXTICR[linepos >> 2u];
+      pExtiConfig->GPIOSel = (regval >> (EXTI_EXTICR1_EXTI1_Pos * (linepos & 0x03u))) & EXTI_EXTICR1_EXTI0;
     }
   }
 
   return HAL_OK;
 }
+
 
 /**
   * @brief  Clear whole configuration of a dedicated Exti line.
@@ -315,9 +358,11 @@ HAL_StatusTypeDef HAL_EXTI_GetConfigLine(EXTI_HandleTypeDef *hexti, EXTI_ConfigT
   */
 HAL_StatusTypeDef HAL_EXTI_ClearConfigLine(EXTI_HandleTypeDef *hexti)
 {
+  __IO uint32_t *regaddr;
   uint32_t regval;
   uint32_t linepos;
   uint32_t maskline;
+  uint32_t offset;
 
   /* Check null pointer */
   if (hexti == NULL)
@@ -328,38 +373,49 @@ HAL_StatusTypeDef HAL_EXTI_ClearConfigLine(EXTI_HandleTypeDef *hexti)
   /* Check the parameter */
   assert_param(IS_EXTI_LINE(hexti->Line));
 
-  /* compute line mask */
+  /* compute line register offset and line mask */
+  offset = ((hexti->Line & EXTI_REG_MASK) >> EXTI_REG_SHIFT);
   linepos = (hexti->Line & EXTI_PIN_MASK);
   maskline = (1uL << linepos);
 
   /* 1] Clear interrupt mode */
-  EXTI->IMR = (EXTI->IMR & ~maskline);
+  regaddr = (&EXTI->IMR1 + (EXTI_MODE_OFFSET * offset));
+  regval = (*regaddr & ~maskline);
+  *regaddr = regval;
 
   /* 2] Clear event mode */
-  EXTI->EMR = (EXTI->EMR & ~maskline);
+  regaddr = (&EXTI->EMR1 + (EXTI_MODE_OFFSET * offset));
+  regval = (*regaddr & ~maskline);
+  *regaddr = regval;
 
   /* 3] Clear triggers in case of configurable lines */
   if ((hexti->Line & EXTI_CONFIG) != 0x00u)
   {
-    EXTI->RTSR = (EXTI->RTSR & ~maskline);
-    EXTI->FTSR = (EXTI->FTSR & ~maskline);
+    regaddr = (&EXTI->RTSR1 + (EXTI_CONFIG_OFFSET * offset));
+    regval = (*regaddr & ~maskline);
+    *regaddr = regval;
+
+    regaddr = (&EXTI->FTSR1 + (EXTI_CONFIG_OFFSET * offset));
+    regval = (*regaddr & ~maskline);
+    *regaddr = regval;
 
     /* Get Gpio port selection for gpio lines */
     if ((hexti->Line & EXTI_GPIO) == EXTI_GPIO)
     {
       assert_param(IS_EXTI_GPIO_PIN(linepos));
 
-      regval = SYSCFG->EXTICR[linepos >> 2u];
-      regval &= ~(SYSCFG_EXTICR1_EXTI0 << (SYSCFG_EXTICR1_EXTI1_Pos * (linepos & 0x03u)));
-      SYSCFG->EXTICR[linepos >> 2u] = regval;
+      regval = EXTI->EXTICR[linepos >> 2u];
+      regval &= ~(EXTI_EXTICR1_EXTI0 << (EXTI_EXTICR1_EXTI1_Pos * (linepos & 0x03u)));
+      EXTI->EXTICR[linepos >> 2u] = regval;
     }
   }
 
   return HAL_OK;
 }
 
+
 /**
-  * @brief  Register callback for a dedicated Exti line.
+  * @brief  Register callback for a dedicaated Exti line.
   * @param  hexti Exti handle.
   * @param  CallbackID User callback identifier.
   *         This parameter can be one of @arg @ref EXTI_CallbackIDTypeDef values.
@@ -373,7 +429,16 @@ HAL_StatusTypeDef HAL_EXTI_RegisterCallback(EXTI_HandleTypeDef *hexti, EXTI_Call
   switch (CallbackID)
   {
     case  HAL_EXTI_COMMON_CB_ID:
-      hexti->PendingCallback = pPendingCbfn;
+      hexti->RisingCallback = pPendingCbfn;
+      hexti->FallingCallback = pPendingCbfn;
+      break;
+
+    case  HAL_EXTI_RISING_CB_ID:
+      hexti->RisingCallback = pPendingCbfn;
+      break;
+
+    case  HAL_EXTI_FALLING_CB_ID:
+      hexti->FallingCallback = pPendingCbfn;
       break;
 
     default:
@@ -383,6 +448,7 @@ HAL_StatusTypeDef HAL_EXTI_RegisterCallback(EXTI_HandleTypeDef *hexti, EXTI_Call
 
   return status;
 }
+
 
 /**
   * @brief  Store line number as handle private field.
@@ -410,13 +476,14 @@ HAL_StatusTypeDef HAL_EXTI_GetHandle(EXTI_HandleTypeDef *hexti, uint32_t ExtiLin
   }
 }
 
+
 /**
   * @}
   */
 
 /** @addtogroup EXTI_Exported_Functions_Group2
-  *  @brief EXTI IO functions.
-  *
+ *  @brief EXTI IO functions.
+ *
 @verbatim
  ===============================================================================
                        ##### IO operation functions #####
@@ -433,80 +500,132 @@ HAL_StatusTypeDef HAL_EXTI_GetHandle(EXTI_HandleTypeDef *hexti, uint32_t ExtiLin
   */
 void HAL_EXTI_IRQHandler(EXTI_HandleTypeDef *hexti)
 {
+  __IO uint32_t *regaddr;
   uint32_t regval;
   uint32_t maskline;
+  uint32_t offset;
 
-  /* Compute line mask */
+  /* Compute line register offset and line mask */
+  offset = ((hexti->Line & EXTI_REG_MASK) >> EXTI_REG_SHIFT);
   maskline = (1uL << (hexti->Line & EXTI_PIN_MASK));
 
-  /* Get pending bit  */
-  regval = (EXTI->PR & maskline);
+  /* Get rising edge pending bit  */
+  regaddr = (&EXTI->RPR1 + (EXTI_CONFIG_OFFSET * offset));
+  regval = (*regaddr & maskline);
+
   if (regval != 0x00u)
   {
     /* Clear pending bit */
-    EXTI->PR = maskline;
+    *regaddr = maskline;
 
-    /* Call callback */
-    if (hexti->PendingCallback != NULL)
+    /* Call rising callback */
+    if (hexti->RisingCallback != NULL)
     {
-      hexti->PendingCallback();
+      hexti->RisingCallback();
+    }
+  }
+
+  /* Get falling edge pending bit  */
+  regaddr = (&EXTI->FPR1 + (EXTI_CONFIG_OFFSET * offset));
+  regval = (*regaddr & maskline);
+
+  if (regval != 0x00u)
+  {
+    /* Clear pending bit */
+    *regaddr = maskline;
+
+    /* Call rising callback */
+    if (hexti->FallingCallback != NULL)
+    {
+      hexti->FallingCallback();
     }
   }
 }
+
 
 /**
   * @brief  Get interrupt pending bit of a dedicated line.
   * @param  hexti Exti handle.
   * @param  Edge Specify which pending edge as to be checked.
   *         This parameter can be one of the following values:
-  *           @arg @ref EXTI_TRIGGER_RISING_FALLING
-  *         This parameter is kept for compatibility with other series.
+  *           @arg @ref EXTI_TRIGGER_RISING
+  *           @arg @ref EXTI_TRIGGER_FALLING
   * @retval 1 if interrupt is pending else 0.
   */
-uint32_t HAL_EXTI_GetPending(EXTI_HandleTypeDef *hexti, uint32_t /*Edge*/)
+uint32_t HAL_EXTI_GetPending(EXTI_HandleTypeDef *hexti, uint32_t Edge)
 {
+  __IO uint32_t *regaddr;
   uint32_t regval;
   uint32_t linepos;
   uint32_t maskline;
+  uint32_t offset;
 
   /* Check parameters */
   assert_param(IS_EXTI_LINE(hexti->Line));
   assert_param(IS_EXTI_CONFIG_LINE(hexti->Line));
   assert_param(IS_EXTI_PENDING_EDGE(Edge));
 
-  /* Compute line mask */
+  /* compute line register offset and line mask */
+  offset = ((hexti->Line & EXTI_REG_MASK) >> EXTI_REG_SHIFT);
   linepos = (hexti->Line & EXTI_PIN_MASK);
   maskline = (1uL << linepos);
 
+  if (Edge != EXTI_TRIGGER_RISING)
+  {
+    /* Get falling edge pending bit */
+    regaddr = (&EXTI->FPR1 + (EXTI_CONFIG_OFFSET * offset));
+  }
+  else
+  {
+    /* Get rising edge pending bit */
+    regaddr = (&EXTI->RPR1 + (EXTI_CONFIG_OFFSET * offset));
+  }
+
   /* return 1 if bit is set else 0 */
-  regval = ((EXTI->PR & maskline) >> linepos);
+  regval = ((*regaddr & maskline) >> linepos);
   return regval;
 }
+
 
 /**
   * @brief  Clear interrupt pending bit of a dedicated line.
   * @param  hexti Exti handle.
   * @param  Edge Specify which pending edge as to be clear.
   *         This parameter can be one of the following values:
-  *           @arg @ref EXTI_TRIGGER_RISING_FALLING
-  *         This parameter is kept for compatibility with other series.
+  *           @arg @ref EXTI_TRIGGER_RISING
+  *           @arg @ref EXTI_TRIGGER_FALLING
   * @retval None.
   */
-void HAL_EXTI_ClearPending(EXTI_HandleTypeDef *hexti, uint32_t /*Edge*/)
+void HAL_EXTI_ClearPending(EXTI_HandleTypeDef *hexti, uint32_t Edge)
 {
+  __IO uint32_t *regaddr;
   uint32_t maskline;
+  uint32_t offset;
 
   /* Check parameters */
   assert_param(IS_EXTI_LINE(hexti->Line));
   assert_param(IS_EXTI_CONFIG_LINE(hexti->Line));
   assert_param(IS_EXTI_PENDING_EDGE(Edge));
 
-  /* Compute line mask */
+  /* compute line register offset and line mask */
+  offset = ((hexti->Line & EXTI_REG_MASK) >> EXTI_REG_SHIFT);
   maskline = (1uL << (hexti->Line & EXTI_PIN_MASK));
 
+  if (Edge != EXTI_TRIGGER_RISING)
+  {
+    /* Get falling edge pending register address */
+    regaddr = (&EXTI->FPR1 + (EXTI_CONFIG_OFFSET * offset));
+  }
+  else
+  {
+    /* Get falling edge pending register address */
+    regaddr = (&EXTI->RPR1 + (EXTI_CONFIG_OFFSET * offset));
+  }
+
   /* Clear Pending bit */
-  EXTI->PR =  maskline;
+  *regaddr =  maskline;
 }
+
 
 /**
   * @brief  Generate a software interrupt for a dedicated line.
@@ -515,18 +634,22 @@ void HAL_EXTI_ClearPending(EXTI_HandleTypeDef *hexti, uint32_t /*Edge*/)
   */
 void HAL_EXTI_GenerateSWI(EXTI_HandleTypeDef *hexti)
 {
+  __IO uint32_t *regaddr;
   uint32_t maskline;
+  uint32_t offset;
 
-  /* Check parameters */
+  /* Check parameterd */
   assert_param(IS_EXTI_LINE(hexti->Line));
   assert_param(IS_EXTI_CONFIG_LINE(hexti->Line));
 
-  /* Compute line mask */
+  /* compute line register offset and line mask */
+  offset = ((hexti->Line & EXTI_REG_MASK) >> EXTI_REG_SHIFT);
   maskline = (1uL << (hexti->Line & EXTI_PIN_MASK));
 
-  /* Generate Software interrupt */
-  EXTI->SWIER = maskline;
+  regaddr = (&EXTI->SWIER1 + (EXTI_CONFIG_OFFSET * offset));
+  *regaddr = maskline;
 }
+
 
 /**
   * @}

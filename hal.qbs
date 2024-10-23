@@ -51,6 +51,12 @@ Product {
             'STM32H7/inc'
         ]
     }
+    Properties {
+        condition: stm32.targetSeries == 'STM32G0'
+        stm32.includePaths: [
+            'STM32G0/inc'
+        ]
+    }
 
     Group {
         name: 'STM32F1'
@@ -74,6 +80,14 @@ Product {
         files: [
             'STM32H7/inc/*.h',
             'STM32H7/src/*.c'
+        ]
+    }
+    Group {
+        name: 'STM32G0'
+        condition: stm32.targetSeries == 'STM32G0'
+        files: [
+            'STM32G0/inc/*.h',
+            'STM32G0/src/*.c'
         ]
     }
 
